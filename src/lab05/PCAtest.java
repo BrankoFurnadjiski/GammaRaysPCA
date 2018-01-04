@@ -1,14 +1,13 @@
 package lab05;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 import Jama.EigenvalueDecomposition;
 import Jama.Matrix;
 
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.FileInputStream;
@@ -35,11 +34,15 @@ public class PCAtest {
 	private List<List<Double>> attributes;
 	
 	private double[][] matrix;
+	private ReducedInfo[] reducedArray;
+	private List<ReducedInfo> testArray;
+	private List<ReducedInfo> setArray;
 	
 	private int characteristics;
 	
 	public static void main(String[] args) {
 		double[][] array;
+		
 		Matrix finalData = null;
 		
 		PCAtest test = new PCAtest();
@@ -52,60 +55,98 @@ public class PCAtest {
 			
 			test.calculateMatrix();
 			
-			EigenvalueDecomposition eigenvalueDecomposition = new EigenvalueDecomposition(new Matrix(test.matrix));
+			finalData = test.getFinalData(test);
 			
-			double[] realEigenvalues = eigenvalueDecomposition.getRealEigenvalues();
-	        Matrix v = eigenvalueDecomposition.getV();
-	        
-	        double[][] matrixV = v.getArray();
-	 
-		    List<EigenVectorValue> eigenVectorValuesList = new ArrayList<>();
-		    for(int i = 0; i < realEigenvalues.length; ++i) {
-		    	EigenVectorValue eigenVectorValue = new EigenVectorValue(realEigenvalues[i], i, matrixV);
-		        eigenVectorValuesList.add(eigenVectorValue);
-		    }
+			array = finalData.getArray();
 			
-		    eigenVectorValuesList = eigenVectorValuesList.stream().sorted().limit(3).collect(Collectors.toList());
-		    
-		    double[][] featureVector = new double[3][test.characteristics];
-		    
-		    for(int i  = 0; i < 3; ++i) {
-		    	for(int j = 0; j < test.characteristics; ++j) {
-		    		featureVector[i][j] = eigenVectorValuesList.get(i).getVector().get(j);
-		    	}
-		    }
-		    
-		    Matrix featureMatrix = new Matrix(featureVector).transpose();
-		    double[][] rawData = transformToMatrix(test.attributes);
-		    Matrix rawMatrix = new Matrix(rawData).transpose();
-		    finalData = rawMatrix.times(featureMatrix);
+			test.divideSet(test, array, list);
+			
+			test.writeData(array, test);
+			
+			System.out.println(test.characteristics);
 			
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
-		}
-		
-		array = finalData.getArray();
-		
-		try {
-			BufferedWriter writer = new BufferedWriter(new FileWriter("output.txt"));
-			System.out.println(writer);
-			for(int i  = 0; i < test.attributes.get(0).size(); ++i) {
-		    	for(int j = 0; j < 3; ++j) {
-		    		writer.write(String.format("%.2f\t", array[i][j]));
-		    	}
-		    	writer.newLine();
-		    }
-			writer.flush();
-			writer.close();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
 		
 	}
 	
-	private static double[][] transformToMatrix(List<List<Double>> attributes2) {
+	private void findBestK() {
+	}
+	
+	private void divideSet(PCAtest test, double[][] array, List<Info> info) {
+
+		reducedArray = new ReducedInfo[attributes.get(0).size()];
+		
+		for(int i = 0; i < test.attributes.get(0).size(); ++ i) {
+			reducedArray[i] = new ReducedInfo(array[i][0], array[i][1], array[i][2], info.get(i).getClassName());
+		}
+		
+		RandomGenerator generator = new RandomGenerator();
+		testArray = new ArrayList<>();
+		setArray = new ArrayList<>();
+		
+		for(int i = 0; i < test.attributes.get(0).size(); ++ i) {
+			if(generator.getNumber() == 0) {
+				testArray.add(reducedArray[i]);
+			} else {
+				setArray.add(reducedArray[i]);
+			}
+		}
+		
+	}
+
+	private void writeData(double[][] array, PCAtest test) throws IOException {
+		BufferedWriter writer = new BufferedWriter(new FileWriter("output.txt"));
+		for(int i  = 0; i < test.attributes.get(0).size(); ++i) {
+	    	for(int j = 0; j < 3; ++j) {
+	    		writer.write(String.format(Locale.ROOT, "%.2f", array[i][j]));
+	    		if(j != 2) {
+	    			writer.write(", ");
+	    		}
+	    	}
+	    	if(i !=  test.attributes.get(0).size()-1){
+	    		writer.newLine();
+	    	}
+	    }
+		writer.flush();
+		writer.close();
+	}
+
+	private Matrix getFinalData(PCAtest test) {
+		EigenvalueDecomposition eigenvalueDecomposition = new EigenvalueDecomposition(new Matrix(test.matrix));
+		
+		double[] realEigenvalues = eigenvalueDecomposition.getRealEigenvalues();
+        Matrix v = eigenvalueDecomposition.getV();
+        
+        double[][] matrixV = v.getArray();
+ 
+	    List<EigenVectorValue> eigenVectorValuesList = new ArrayList<>();
+	    for(int i = 0; i < realEigenvalues.length; ++i) {
+	    	EigenVectorValue eigenVectorValue = new EigenVectorValue(realEigenvalues[i], i, matrixV);
+	        eigenVectorValuesList.add(eigenVectorValue);
+	    }
+		
+	    eigenVectorValuesList = eigenVectorValuesList.stream().sorted().limit(3).collect(Collectors.toList());
+	    
+	    double[][] featureVector = new double[3][test.characteristics];
+	    
+	    for(int i  = 0; i < 3; ++i) {
+	    	for(int j = 0; j < test.characteristics; ++j) {
+	    		featureVector[i][j] = eigenVectorValuesList.get(i).getVector().get(j);
+	    	}
+	    }
+	    
+	    Matrix featureMatrix = new Matrix(featureVector).transpose();
+	    double[][] rawData = transformToMatrix(test.attributes);
+	    Matrix rawMatrix = new Matrix(rawData).transpose();
+	    return rawMatrix.times(featureMatrix);
+	}
+	
+	private double[][] transformToMatrix(List<List<Double>> attributes2) {
 		double[][] rawData = new double[attributes2.size()][attributes2.get(0).size()];
 		for(int i = 0; i < attributes2.size(); ++i) {
 			for(int j = 0; j < attributes2.get(0).size(); ++j) {
