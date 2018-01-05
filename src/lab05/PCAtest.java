@@ -1,6 +1,8 @@
 package lab05;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
@@ -34,7 +36,7 @@ public class PCAtest {
 	private List<List<Double>> attributes;
 	
 	private double[][] matrix;
-	private ReducedInfo[] reducedArray;
+	private List<ReducedInfo> reducedArray;
 	private List<ReducedInfo> testArray;
 	private List<ReducedInfo> setArray;
 	
@@ -59,11 +61,28 @@ public class PCAtest {
 			
 			array = finalData.getArray();
 			
-			test.divideSet(test, array, list);
+			test.reduceSet(test, array, list);
 			
-			test.writeData(array, test);
+			test.reducedArray = test.normalizeData(test.reducedArray);
 			
-			System.out.println(test.characteristics);
+			test.divideSet(test, list);
+			
+//			System.out.print("TESTSET ");
+//			System.out.println(test.testArray.size());
+//			test.testArray.stream().limit(10).forEach(System.out::println);
+//			
+//			System.out.print("DATASET ");
+//			System.out.println(test.setArray.size());
+//			test.setArray.stream().limit(10).forEach(System.out::println);
+			
+			test.writeData(test.reducedArray, test);
+			
+			int best = 2;
+			//test.findBestK(test);
+			
+			int error = test.calculateErrorForPredefinedK(best, test);
+			
+			System.out.println(error);
 			
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
@@ -74,40 +93,162 @@ public class PCAtest {
 		
 	}
 	
-	private void findBestK() {
-	}
-	
-	private void divideSet(PCAtest test, double[][] array, List<Info> info) {
+	private int calculateErrorForPredefinedK(int best, PCAtest test) {
 
-		reducedArray = new ReducedInfo[attributes.get(0).size()];
+		int testSize = test.testArray.size();
+		int setSize = test.setArray.size();
+		int counterG;
+		int counterH;
+	    int counter = 0;
 		
-		for(int i = 0; i < test.attributes.get(0).size(); ++ i) {
-			reducedArray[i] = new ReducedInfo(array[i][0], array[i][1], array[i][2], info.get(i).getClassName());
+		for(int i = 0; i < testSize; ++i) {
+			counterG = 0;
+			counterH = 0;
+			ReducedInfo current = test.testArray.get(i);
+			List<ReducedInfoDistance> reducedInfoDistances = new ArrayList<>();
+			
+			for(int j = 0; j < setSize; ++j) {
+				ReducedInfo comparingTo = test.setArray.get(j);
+				double distance = current.distance(comparingTo);
+				reducedInfoDistances.add(new ReducedInfoDistance(comparingTo, distance));
+			}
+			
+			Collections.sort(reducedInfoDistances, Comparator.comparing(ReducedInfoDistance::getDistance));
+			reducedInfoDistances = reducedInfoDistances.stream().limit(best).collect(Collectors.toList());
+			
+			for(int l = 0; l < best; ++l) {
+				if(reducedInfoDistances.get(l).getReducedInfo().getName().compareTo("g") == 0) {
+					counterG++;
+				} else {
+					counterH++;
+				}
+			}
+			
+			if(counterG > counterH && current.getName().compareTo("h") == 0) {
+				counter++;
+			} else if(counterG < counterH && current.getName().compareTo("g") == 0) {
+				counter++;
+			} else {
+				RandomGenerator generator = new RandomGenerator(5, 5);
+				int where = generator.getNumber();
+				if(where == 0 && current.getName().compareTo("h") == 0) {
+					counter++;
+				} else if (where == 1 && current.getName().compareTo("g") == 0) {
+					counter++;
+				}
+			}
+			
 		}
 		
-		RandomGenerator generator = new RandomGenerator();
-		testArray = new ArrayList<>();
-		setArray = new ArrayList<>();
+		return counter;
+	}
+
+	private void reduceSet(PCAtest test, double[][] array,List<Info> info) {
+
+		reducedArray = new ArrayList<>();
+		
+		for(int i = 0; i < test.attributes.get(0).size(); ++ i) {
+			reducedArray.add(new ReducedInfo(array[i][0], array[i][1], array[i][2], info.get(i).getClassName()));
+		}
+		
+	}
+
+	private List<ReducedInfo> normalizeData(List<ReducedInfo> reducedArray) {
+		
+		double maxPCA1 = reducedArray.stream().map(ReducedInfo::getPCA1).max(Comparator.naturalOrder()).orElse((double) 0);
+		double maxPCA2 = reducedArray.stream().map(ReducedInfo::getPCA2).max(Comparator.naturalOrder()).orElse((double) 0);
+		double maxPCA3 = reducedArray.stream().map(ReducedInfo::getPCA3).max(Comparator.naturalOrder()).orElse((double) 0);
+		
+		double minPCA1 = reducedArray.stream().map(ReducedInfo::getPCA1).min(Comparator.naturalOrder()).orElse((double) 0);
+		double minPCA2 = reducedArray.stream().map(ReducedInfo::getPCA2).min(Comparator.naturalOrder()).orElse((double) 0);
+		double minPCA3 = reducedArray.stream().map(ReducedInfo::getPCA3).min(Comparator.naturalOrder()).orElse((double) 0);
+		
+		return reducedArray.stream().map(info -> normalizedInfo(info, maxPCA1, minPCA1, maxPCA2, minPCA2, maxPCA3, minPCA3)).collect(Collectors.toList());
+		
+	}
+	
+	private ReducedInfo normalizedInfo(ReducedInfo info, double max1, double min1, double max2, double min2, double max3, double min3) {
+		return new ReducedInfo((info.getPCA1() - min1)/(max1-min1),(info.getPCA2() - min2)/(max2-min2),(info.getPCA3() - min2)/(max2-min2),info.getName());
+	}
+
+	private int findBestK(PCAtest test) {
+		int n = reducedArray.size();
+		int bestK = 1;
+		int minError = Integer.MAX_VALUE;
+		
+		for(int i = 1; i < Math.sqrt(n); i *= 2) {
+			int currentError = calculateError(i);
+			System.out.print("Current k: " + i);
+			System.out.println(" Missclasiffication: " + currentError);
+			if(currentError < minError) { 
+				minError = currentError;
+				bestK = i;
+			}
+		}
+		
+		return bestK;
+		
+	}
+	
+	private int calculateError(int k) {
+		int n = reducedArray.size();
+		int counterG;
+		int counterH;
+	    int counter = 0;
+		
+		for(int i = 0; i < n; ++i) {
+			counterG = 0;
+			counterH = 0;
+			ReducedInfo current = reducedArray.get(i);
+			List<ReducedInfoDistance> reducedInfoDistances = new ArrayList<>();
+			
+			for(int j = 0; j < n; ++j) {
+				if(i != j) {
+					ReducedInfo comparingTo = reducedArray.get(j);
+					double distance = current.distance(comparingTo);
+					reducedInfoDistances.add(new ReducedInfoDistance(comparingTo, distance));
+				}
+			}
+			
+			Collections.sort(reducedInfoDistances, Comparator.comparing(ReducedInfoDistance::getDistance));
+			reducedInfoDistances = reducedInfoDistances.stream().limit(k).collect(Collectors.toList());
+			
+			for(int l = 0; l < k; ++l) {
+				if(reducedInfoDistances.get(l).getReducedInfo().getName().compareTo("g") == 0) {
+					counterG++;
+				} else {
+					counterH++;
+				}
+			}
+			
+			if(counterG > counterH && current.getName().compareTo("h") == 0)
+				counter++;
+			
+		}
+		
+		return counter;
+	}
+	
+	private void divideSet(PCAtest test, List<Info> info) {
+		RandomGenerator generator = new RandomGenerator(3,7);
+		
+		test.testArray = new ArrayList<>();
+		test.setArray = new ArrayList<>();
 		
 		for(int i = 0; i < test.attributes.get(0).size(); ++ i) {
 			if(generator.getNumber() == 0) {
-				testArray.add(reducedArray[i]);
+				testArray.add(test.reducedArray.get(i));
 			} else {
-				setArray.add(reducedArray[i]);
+				setArray.add(test.reducedArray.get(i));
 			}
 		}
 		
 	}
 
-	private void writeData(double[][] array, PCAtest test) throws IOException {
+	private void writeData(List<ReducedInfo> array, PCAtest test) throws IOException {
 		BufferedWriter writer = new BufferedWriter(new FileWriter("output.txt"));
 		for(int i  = 0; i < test.attributes.get(0).size(); ++i) {
-	    	for(int j = 0; j < 3; ++j) {
-	    		writer.write(String.format(Locale.ROOT, "%.2f", array[i][j]));
-	    		if(j != 2) {
-	    			writer.write(", ");
-	    		}
-	    	}
+			writer.write(String.format(Locale.ROOT, "%s", array.get(i)));
 	    	if(i !=  test.attributes.get(0).size()-1){
 	    		writer.newLine();
 	    	}
