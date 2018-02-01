@@ -77,12 +77,12 @@ public class PCAtest {
 			
 			test.writeData(test.reducedArray, test);
 			
-			int best = 2;
-			//test.findBestK(test);
+			//int best = 2;
+			int best = test.findBestK(test);
 			
 			int error = test.calculateErrorForPredefinedK(best, test);
 			
-			System.out.println(error);
+			System.out.println(error);		
 			
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
@@ -128,7 +128,7 @@ public class PCAtest {
 				counter++;
 			} else if(counterG < counterH && current.getName().compareTo("g") == 0) {
 				counter++;
-			} else {
+			} else if(counterG == counterH){
 				RandomGenerator generator = new RandomGenerator(5, 5);
 				int where = generator.getNumber();
 				if(where == 0 && current.getName().compareTo("h") == 0) {
@@ -222,6 +222,8 @@ public class PCAtest {
 			}
 			
 			if(counterG > counterH && current.getName().compareTo("h") == 0)
+				counter++;
+			if(counterH > counterG && current.getName().compareTo("g") == 0)
 				counter++;
 			
 		}
